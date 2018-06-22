@@ -476,6 +476,94 @@ struct emd_hat_impl<double,FLOW_TYPE> {
     
 }; // emd_hat_impl<double>
 //----------------------------------------------------------------------------------------
+
+
+
+
+template<FLOW_TYPE_T FLOW_TYPE>
+struct emd_hat_impl<float,FLOW_TYPE> {
+
+    typedef float NUM_T;
+    typedef long long int CONVERT_TO_T;
+
+    NUM_T operator()(
+        const std::vector<NUM_T>& POrig, const std::vector<NUM_T>& QOrig,
+        const std::vector<NUM_T>& P, const std::vector<NUM_T>& Q,
+        const std::vector< std::vector<NUM_T> >& C,
+        NUM_T extra_mass_penalty,
+        std::vector< std::vector<NUM_T> >* F) {
+
+    // TODO: static assert
+    assert(sizeof(CONVERT_TO_T)>=8);
+
+    // This condition should hold:
+    // ( 2^(sizeof(CONVERT_TO_T*8)) >= ( MULT_FACTOR^2 )
+    // Note that it can be problematic to check it because
+    // of overflow problems. I simply checked it with Linux calc
+    // which has arbitrary precision.
+    const float MULT_FACTOR= 1000000;
+
+    // Constructing the input
+    const NODE_T N= P.size();
+    std::vector<CONVERT_TO_T> iPOrig(N);
+    std::vector<CONVERT_TO_T> iQOrig(N);
+    std::vector<CONVERT_TO_T> iP(N);
+    std::vector<CONVERT_TO_T> iQ(N);
+    std::vector< std::vector<CONVERT_TO_T> > iC(N, std::vector<CONVERT_TO_T>(N) );
+    std::vector< std::vector<CONVERT_TO_T> > iF(N, std::vector<CONVERT_TO_T>(N) );
+
+    // Converting to CONVERT_TO_T
+    float sumP= 0.0;
+    float sumQ= 0.0;
+    float maxC= C[0][0];
+    for (NODE_T i= 0; i<N; ++i) {
+        sumP+= POrig[i];
+        sumQ+= QOrig[i];
+        for (NODE_T j= 0; j<N; ++j) {
+            if (C[i][j]>maxC) maxC= C[i][j];
+        }
+    }
+    float minSum= std::min(sumP,sumQ);
+    float maxSum= std::max(sumP,sumQ);
+    float PQnormFactor= MULT_FACTOR/maxSum;
+    float CnormFactor= MULT_FACTOR/maxC;
+    for (NODE_T i= 0; i<N; ++i) {
+        iPOrig[i]= static_cast<CONVERT_TO_T>(floor(POrig[i]*PQnormFactor+0.5));
+        iQOrig[i]= static_cast<CONVERT_TO_T>(floor(QOrig[i]*PQnormFactor+0.5));
+        iP[i]= static_cast<CONVERT_TO_T>(floor(P[i]*PQnormFactor+0.5));
+        iQ[i]= static_cast<CONVERT_TO_T>(floor(Q[i]*PQnormFactor+0.5));
+        for (NODE_T j= 0; j<N; ++j) {
+            iC[i][j]= static_cast<CONVERT_TO_T>(floor(C[i][j]*CnormFactor+0.5));
+            if (FLOW_TYPE!=NO_FLOW) {
+                iF[i][j]= static_cast<CONVERT_TO_T>(floor(((*F)[i][j])*PQnormFactor+0.5));
+            }
+        }
+    }
+
+    // computing distance without extra mass penalty
+    float dist= emd_hat_impl<CONVERT_TO_T,FLOW_TYPE>()(iPOrig,iQOrig,iP,iQ,iC,0,&iF);
+    // unnormalize
+    dist= dist/PQnormFactor;
+    dist= dist/CnormFactor;
+
+    // adding extra mass penalty
+    if (extra_mass_penalty==-1) extra_mass_penalty= maxC;
+    dist+= (maxSum-minSum)*extra_mass_penalty;
+
+    // converting flow to double
+    if (FLOW_TYPE!=NO_FLOW) {
+        for (NODE_T i= 0; i<N; ++i) {
+            for (NODE_T j= 0; j<N; ++j) {
+                (*F)[i][j]= (iF[i][j]/PQnormFactor);
+            }
+        }
+    }
+
+    return dist;
+    }
+
+}; // emd_hat_impl<float>
+//----------------------------------------------------------------------------------------
 #endif
 
 // Copyright (c) 2009-2012, Ofir Pele

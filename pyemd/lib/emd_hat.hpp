@@ -73,6 +73,18 @@ emd_hat_gd_metric<double, WITHOUT_EXTRA_MASS_FLOW>
     emd_hat_gd_metric_double_with_flow;
 /// =========================================================================
 
+
+/// Instantiate the template for importing into Cython
+emd_hat_gd_metric<float, NO_FLOW> emd_hat_gd_metric_float;
+/// =========================================================================
+
+/// =========================================================================
+/// 2017-01-06 - Added by Will Mayner <wmayner@gmail.com>
+/// -------------------------------------------------------------------------
+emd_hat_gd_metric<float, WITHOUT_EXTRA_MASS_FLOW>
+    emd_hat_gd_metric_float_with_flow;
+/// =========================================================================
+///
 /// =========================================================================
 /// 2016-11-25 - Added by Rémi Louf <remi@sciti.es>
 /// -------------------------------------------------------------------------
@@ -90,6 +102,20 @@ std::pair< double, std::vector<std::vector<double> > >
     return results;
 }
 /// =========================================================================
+
+
+std::pair< float, std::vector<std::vector<float> > >
+    emd_hat_gd_metric_float_with_flow_wrapper(
+        const std::vector<float>& P,
+        const std::vector<float>& Q,
+        const std::vector<std::vector<float> >& C,
+        float extra_mass_penalty) {
+    std::vector<std::vector<float>> flow(P.size(), std::vector<float>(P.size()));
+    float emd = emd_hat_gd_metric_float_with_flow(P, Q, C, extra_mass_penalty, &flow);
+    std::pair<float, std::vector<std::vector<float>>> results =
+        std::make_pair(emd, flow);
+    return results;
+}
 
 
 #include "emd_hat_impl.hpp"

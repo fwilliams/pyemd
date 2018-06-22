@@ -29,7 +29,17 @@ cdef extern from "lib/emd_hat.hpp":
                                                    vector[vector[double]],
                                                    double) except +
 
+    cdef float \
+        emd_hat_gd_metric_float(vector[float],
+                                vector[float],
+                                vector[vector[float]],
+                                double) except +
 
+    cdef pair[float, vector[vector[float]]] \
+        emd_hat_gd_metric_float_with_flow_wrapper(vector[float],
+                                                  vector[float],
+                                                  vector[vector[float]],
+                                                  float) except +
 # Define the API
 # ==============
 
@@ -45,11 +55,96 @@ def _validate_emd_input(first_histogram, second_histogram, distance_matrix):
     if (first_histogram.shape[0] != second_histogram.shape[0]):
         raise ValueError('Histogram lengths must be equal')
 
+def emd(first_histogram, second_histogram, distance_matrix, extra_mass_penalty=DEFAULT_EXTRA_MASS_PENALTY):
+    u"""Return the EMD between two histograms using the given distance matrix.
 
-def emd(np.ndarray[np.float64_t, ndim=1, mode="c"] first_histogram,
-        np.ndarray[np.float64_t, ndim=1, mode="c"] second_histogram,
-        np.ndarray[np.float64_t, ndim=2, mode="c"] distance_matrix,
-        extra_mass_penalty=DEFAULT_EXTRA_MASS_PENALTY):
+    The Earth Mover's Distance is the minimal cost of turning one histogram into
+    another by moving around the “dirt” in the bins, where the cost of moving
+    dirt from one bin to another is given by the amount of dirt times the
+    “ground distance” between the bins.
+
+    Arguments:
+        first_histogram (np.ndarray): A 1D array of type np.float64 of length N.
+        second_histogram (np.ndarray): A 1D array of np.float64 of length N.
+        distance_matrix (np.ndarray): A 2D array of np.float64, of size at least
+            N × N. This defines the underlying metric, or ground distance, by
+            giving the pairwise distances between the histogram bins. It must
+            represent a metric; there is no warning if it doesn't.
+
+    Keyword Arguments:
+        extra_mass_penalty (float): The penalty for extra mass. If you want the
+            resulting distance to be a metric, it should be at least half the
+            diameter of the space (maximum possible distance between any two
+            points). If you want partial matching you can set it to zero (but
+            then the resulting distance is not guaranteed to be a metric). The
+            default value is -1, which means the maximum value in the distance
+            matrix is used.
+
+    Returns:
+        float: The EMD value.
+
+    Raises:
+        ValueError: If the length of either histogram is greater than the number
+        of rows or columns of the distance matrix, or if the histograms aren't
+        the same length.
+    """
+
+    if first_histogram.dtype != second_histogram.dtype or first_histogram.dtype != distance_matrix.dtype:
+        raise ValueError("arguments first_histogram, second_histogram, and distance_matrix must have the same type")
+
+    if first_histogram.dtype == np.float64:
+        return emd64(first_histogram, second_histogram, distance_matrix, extra_mass_penalty)
+    elif first_histogram.dtype == np.float32:
+        return emd32(first_histogram, second_histogram, distance_matrix, extra_mass_penalty)
+
+
+def emd32(np.ndarray[np.float32_t, ndim=1, mode="c"] first_histogram,
+          np.ndarray[np.float32_t, ndim=1, mode="c"] second_histogram,
+          np.ndarray[np.float32_t, ndim=2, mode="c"] distance_matrix,
+          extra_mass_penalty=DEFAULT_EXTRA_MASS_PENALTY):
+    u"""Return the EMD between two histograms using the given distance matrix.
+
+    The Earth Mover's Distance is the minimal cost of turning one histogram into
+    another by moving around the “dirt” in the bins, where the cost of moving
+    dirt from one bin to another is given by the amount of dirt times the
+    “ground distance” between the bins.
+
+    Arguments:
+        first_histogram (np.ndarray): A 1D array of type np.float64 of length N.
+        second_histogram (np.ndarray): A 1D array of np.float64 of length N.
+        distance_matrix (np.ndarray): A 2D array of np.float64, of size at least
+            N × N. This defines the underlying metric, or ground distance, by
+            giving the pairwise distances between the histogram bins. It must
+            represent a metric; there is no warning if it doesn't.
+
+    Keyword Arguments:
+        extra_mass_penalty (float): The penalty for extra mass. If you want the
+            resulting distance to be a metric, it should be at least half the
+            diameter of the space (maximum possible distance between any two
+            points). If you want partial matching you can set it to zero (but
+            then the resulting distance is not guaranteed to be a metric). The
+            default value is -1, which means the maximum value in the distance
+            matrix is used.
+
+    Returns:
+        float: The EMD value.
+
+    Raises:
+        ValueError: If the length of either histogram is greater than the number
+        of rows or columns of the distance matrix, or if the histograms aren't
+        the same length.
+    """
+    _validate_emd_input(first_histogram, second_histogram, distance_matrix)
+    return emd_hat_gd_metric_float(first_histogram,
+                                    second_histogram,
+                                    distance_matrix,
+                                    extra_mass_penalty)
+
+
+def emd64(np.ndarray[np.float64_t, ndim=1, mode="c"] first_histogram,
+         np.ndarray[np.float64_t, ndim=1, mode="c"] second_histogram,
+         np.ndarray[np.float64_t, ndim=2, mode="c"] distance_matrix,
+         extra_mass_penalty=DEFAULT_EXTRA_MASS_PENALTY):
     u"""Return the EMD between two histograms using the given distance matrix.
 
     The Earth Mover's Distance is the minimal cost of turning one histogram into
@@ -89,7 +184,94 @@ def emd(np.ndarray[np.float64_t, ndim=1, mode="c"] first_histogram,
                                     extra_mass_penalty)
 
 
-def emd_with_flow(np.ndarray[np.float64_t, ndim=1, mode="c"] first_histogram,
+def emd_with_flow(first_histogram, second_histogram, distance_matrix, extra_mass_penalty=DEFAULT_EXTRA_MASS_PENALTY):
+    u"""Return the EMD between two histograms using the given distance matrix.
+
+    The Earth Mover's Distance is the minimal cost of turning one histogram into
+    another by moving around the “dirt” in the bins, where the cost of the
+    “ground distance” between the bins. moving dirt from one bin to another is
+    given by the amount of dirt times
+
+    Arguments:
+        first_histogram (np.ndarray): A 1D array of type np.float64 of length N.
+        second_histogram (np.ndarray): A 1D array of np.float64 of length N.
+        distance_matrix (np.ndarray): A 2D array of np.float64, of size at least
+            N × N. This defines the underlying metric, or ground distance, by
+            giving the pairwise distances between the histogram bins. It must
+            represent a metric; there is no warning if it doesn't.
+
+    Keyword Arguments:
+        extra_mass_penalty (float): The penalty for extra mass. If you want the
+            resulting distance to be a metric, it should be at least half the
+            diameter of the space (maximum possible distance between any two
+            points). If you want partial matching you can set it to zero (but
+            then the resulting distance is not guaranteed to be a metric). The
+            default value is -1, which means the maximum value in the distance
+            matrix is used.
+
+    Returns:
+        (tuple(float, list(list(float)))): The EMD value and the associated
+        minimum-cost flow.
+
+    Raises:
+        ValueError: If the length of either histogram is greater than the number
+        of rows or columns of the distance matrix, or if the histograms aren't
+        the same length.
+    """
+    if first_histogram.dtype != second_histogram.dtype or first_histogram.dtype != distance_matrix.dtype:
+        raise ValueError("arguments first_histogram, second_histogram, and distance_matrix must have the same type")
+
+    if first_histogram.dtype == np.float64:
+        return emd_with_flow64(first_histogram, second_histogram, distance_matrix, extra_mass_penalty)
+    elif first_histogram.dtype == np.float32:
+        return emd_with_flow32(first_histogram, second_histogram, distance_matrix, extra_mass_penalty)
+
+
+def emd_with_flow32(np.ndarray[np.float32_t, ndim=1, mode="c"] first_histogram,
+                  np.ndarray[np.float32_t, ndim=1, mode="c"] second_histogram,
+                  np.ndarray[np.float32_t, ndim=2, mode="c"] distance_matrix,
+                  extra_mass_penalty=DEFAULT_EXTRA_MASS_PENALTY):
+    u"""Return the EMD between two histograms using the given distance matrix.
+
+    The Earth Mover's Distance is the minimal cost of turning one histogram into
+    another by moving around the “dirt” in the bins, where the cost of the
+    “ground distance” between the bins. moving dirt from one bin to another is
+    given by the amount of dirt times
+
+    Arguments:
+        first_histogram (np.ndarray): A 1D array of type np.float64 of length N.
+        second_histogram (np.ndarray): A 1D array of np.float64 of length N.
+        distance_matrix (np.ndarray): A 2D array of np.float64, of size at least
+            N × N. This defines the underlying metric, or ground distance, by
+            giving the pairwise distances between the histogram bins. It must
+            represent a metric; there is no warning if it doesn't.
+
+    Keyword Arguments:
+        extra_mass_penalty (float): The penalty for extra mass. If you want the
+            resulting distance to be a metric, it should be at least half the
+            diameter of the space (maximum possible distance between any two
+            points). If you want partial matching you can set it to zero (but
+            then the resulting distance is not guaranteed to be a metric). The
+            default value is -1, which means the maximum value in the distance
+            matrix is used.
+
+    Returns:
+        (tuple(float, list(list(float)))): The EMD value and the associated
+        minimum-cost flow.
+
+    Raises:
+        ValueError: If the length of either histogram is greater than the number
+        of rows or columns of the distance matrix, or if the histograms aren't
+        the same length.
+    """
+    _validate_emd_input(first_histogram, second_histogram, distance_matrix)
+    return emd_hat_gd_metric_float_with_flow_wrapper(first_histogram,
+                                                     second_histogram,
+                                                     distance_matrix,
+                                                     extra_mass_penalty)
+
+
+def emd_with_flow64(np.ndarray[np.float64_t, ndim=1, mode="c"] first_histogram,
                   np.ndarray[np.float64_t, ndim=1, mode="c"] second_histogram,
                   np.ndarray[np.float64_t, ndim=2, mode="c"] distance_matrix,
                   extra_mass_penalty=DEFAULT_EXTRA_MASS_PENALTY):
@@ -145,7 +327,8 @@ def emd_samples(first_array,
                 distance='euclidean',
                 normalized=True,
                 bins='auto',
-                range=None):
+                range=None,
+                dtype=np.float32):
     u"""Return the EMD between the histograms of two arrays.
 
     See ``emd()`` for more information about the EMD.
@@ -187,8 +370,8 @@ def emd_samples(first_array,
         float: The EMD value between the histograms of ``first_array`` and
         ``second_array``.
     """
-    first_array = np.array(first_array)
-    second_array = np.array(second_array)
+    first_array = np.array(first_array, dtype=dtype)
+    second_array = np.array(second_array, dtype=dtype)
     # Validate arrays
     if not (first_array.size > 0 and second_array.size > 0):
         raise ValueError('Arrays of samples cannot be empty.')
@@ -232,9 +415,25 @@ def emd_samples(first_array,
         raise ValueError(
             'Distance matrix must have at least as many rows/columns as there '
             'are bins in the histograms; check your `distance` function.')
-    # Return the EMD (no need to call the wrapper function, since this function
-    # does its own validation, so we call the exposed C++ function directly)
-    return emd_hat_gd_metric_double(first_histogram,
-                                    second_histogram,
-                                    distance_matrix,
-                                    extra_mass_penalty)
+
+
+    if first_histogram.dtype != second_histogram.dtype or first_histogram.dtype != distance_matrix.dtype:
+        raise ValueError("arguments first_histogram, second_histogram, and distance_matrix must have the same type")
+
+    if first_histogram.dtype == np.float64:
+        return emd_hat_gd_metric_double(first_histogram,
+                                        second_histogram,
+                                        distance_matrix,
+                                        extra_mass_penalty)
+    elif first_histogram.dtype == np.float32:
+        return emd_hat_gd_metric_float(first_histogram,
+                                        second_histogram,
+                                        distance_matrix,
+                                        extra_mass_penalty)
+
+    #    # Return the EMD (no need to call the wrapper function, since this function
+    #    # does its own validation, so we call the exposed C++ function directly)
+    #    return emd_hat_gd_metric_double(first_histogram,
+    #                                    second_histogram,
+    #                                    distance_matrix,
+    #                                    extra_mass_penalty)
