@@ -11,3 +11,5 @@ MANIFEST
 build
 dist
 pyemd/emd.cpp
+*.creator.user
+pyemd_env
